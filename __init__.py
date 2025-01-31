@@ -53,7 +53,7 @@ def YaraScan(file_path):
     )
     
     if not result.stdout.strip():
-        return "Undetected"
+        return []
     # Extracting the rule names
     rule_names = [line.split(' ')[0] for line in result.stdout.strip().split('\n') if line]
     return rule_names
@@ -82,13 +82,13 @@ def ClamYaraProcessFile(hash_value):
     
     # Scan with Yara
     yr_result = YaraScan(temp_file_path)
-    comment += f"YARA: {', '.join(yr_result)}\n" if yr_result != "Undetected" else "YARA: Undetected\n"
+    comment += f"YARA: {', '.join(yr_result)}\n" if yr_result else "YARA: Undetected\n"
     
     # Add results
     file.add_comment(comment.strip())
     if cl_result != 'Error' and cl_result != 'Undetected':
         ClamYaraAddTag(file, 'clamav', cl_result)
-    if yr_result != "Undetected":
+    if yr_result:
         for detect in yr_result:
             ClamYaraAddTag(file, 'yara', detect)
     
