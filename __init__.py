@@ -54,9 +54,8 @@ def YaraScan(file_path):
     
     if not result.stdout.strip():
         return []
-    # Extracting the rule names
-    rule_names = [line.split(' ')[0] for line in result.stdout.strip().split('\n') if line]
-    return rule_names
+    matches = [line.split(' ')[0] for line in result.stdout.strip().split('\n') if line]
+    return matches
 
 def ClamYaraAddTag(file, av_name: str, av_result: str):
     for tag in file.tags:
