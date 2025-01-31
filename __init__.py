@@ -2,6 +2,7 @@ import logging
 import requests
 import subprocess
 import re
+import os
 from datetime import datetime
 
 from mwdb.core.plugins import PluginAppContext, PluginHookHandler
@@ -14,9 +15,11 @@ __doc__ = "Local plugin for MWDB that scans (re-)uploaded using ClamAV and Yara"
 
 logger = logging.getLogger("mwdb.plugin.clamyara")
 
-SCAN_DIR = '/tmp/share'
 config_api_url = ""
 config_api_key = ""
+SCAN_DIR = '/tmp/share'
+if not os.path.exists(SCAN_DIR):
+    os.makedirs(SCAN_DIR)
 
 def ClamScan(directory, filename):
     """Runs the clamdscan program with specified parameters."""
@@ -59,7 +62,7 @@ def ClamYaraAddTag(file, av_name: str, av_result: str):
 def ClamYaraProcessFile(hash_value):
     mwdb = MWDB(api_url=config_api_url, api_key=config_api_key)
     file = mwdb.query_file(hash_value)
-    
+
     temp_file_path = f"{SCAN_DIR}/{hash_value}"
     with open(temp_file_path, "wb") as f:
         f.write(file.content)
@@ -77,6 +80,9 @@ def ClamYaraProcessFile(hash_value):
     file.add_comment(comment.strip())
     if cl_result != 'Error' and cl_result != 'Undetected':
         ClamYaraAddTag(file, 'clamav', cl_result)
+    
+    # Remove the temporary file
+    os.remove(temp_file_path)
 
 class ClamYaraHookHandler(PluginHookHandler):
     def on_created_file(self, file: File):
