@@ -30,18 +30,9 @@ def ClamScan(directory, filename):
         capture_output=True, text=True
     )
 
-    if "ERROR" in result.stdout:
+    if "ERROR" in result.stdout.strip():
         return "Error"
-    match = re.search(r'{}: (.*) FOUND'.format(re.escape(filename)), result.stdout)
-    if match:
-        return match.group(1)
-    return "Undetected"
-
-def ClamParse(output, filename):
-    """Parses the output to find the threat for the specified file."""
-    if "ERROR" in output:
-        return "Error"
-    match = re.search(r'{}: (.*) FOUND'.format(re.escape(filename)), output)
+    match = re.search(r'{}: (.*) FOUND'.format(re.escape(filename)), result.stdout.strip())
     if match:
         return match.group(1)
     return "Undetected"
@@ -60,14 +51,11 @@ def YaraScan(file_path):
         ["yara", YARA_RULES_FILE, file_path], 
         capture_output=True, text=True
     )
-    return result.stdout.strip()
-
-def YaraParse(output):
-    """Parses the YARA output to find the rule matches."""
-    if not output:
+    
+    if not result.stdout.strip():
         return "Undetected"
     # Extracting the rule names
-    rule_names = [line.split(' ')[0] for line in output.split('\n') if line]
+    rule_names = [line.split(' ')[0] for line in result.stdout.strip().split('\n') if line]
     return rule_names
 
 def ClamYaraAddTag(file, av_name: str, av_result: str):
@@ -93,17 +81,16 @@ def ClamYaraProcessFile(hash_value):
     comment += f"ClamAV: {cl_result} (Version: {cl_version})\n"
     
     # Scan with Yara
-    yara_result = YaraScan(temp_file_path)
-    yara_matches = YaraParse(yara_result)
-    comment += f"YARA Matches: {', '.join(yara_matches)}\n" if yara_matches != "Undetected" else "YARA: Undetected\n"
+    yr_result = YaraScan(temp_file_path)
+    comment += f"YARA: {', '.join(yr_result)}\n" if yr_result != "Undetected" else "YARA: Undetected\n"
     
     # Add results
     file.add_comment(comment.strip())
     if cl_result != 'Error' and cl_result != 'Undetected':
         ClamYaraAddTag(file, 'clamav', cl_result)
-    if yara_matches != "Undetected":
-        for match in yara_matches:
-            ClamYaraAddTag(file, 'yara', match)
+    if yr_result != "Undetected":
+        for detect in yr_result:
+            ClamYaraAddTag(file, 'yara', detect)
     
     # Remove the temporary file
     os.remove(temp_file_path)
