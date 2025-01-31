@@ -66,7 +66,9 @@ def YaraParse(output):
     """Parses the YARA output to find the rule matches."""
     if not output:
         return "Undetected"
-    return output.split("\n")
+    # Extracting the rule names
+    rule_names = [line.split(' ')[0] for line in output.split('\n') if line]
+    return rule_names
 
 def ClamYaraAddTag(file, av_name: str, av_result: str):
     for tag in file.tags:
