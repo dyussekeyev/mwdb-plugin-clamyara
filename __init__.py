@@ -59,8 +59,8 @@ def YaraScan(file_path):
 
 def ClamYaraAddTag(file, av_name: str, av_result: str):
     for tag in file.tags:
-        if tag.lower().startswith(f"{av_name.lower()}:"):
-            file.remove_tag(tag)
+        if tag.lower() == f"{av_name.lower()}:{av_result.lower()}":
+            return
 
     file.add_tag(f"{av_name.lower()}:{av_result.lower()}")
 
