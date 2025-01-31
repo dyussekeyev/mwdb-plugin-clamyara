@@ -1,5 +1,7 @@
 import logging
 import requests
+import subprocess
+import re
 from datetime import datetime
 
 from mwdb.core.plugins import PluginAppContext, PluginHookHandler
@@ -16,7 +18,7 @@ SCAN_DIR = '/tmp/share'
 config_api_url = ""
 config_api_key = ""
 
-def ClamScan(directory):
+def ClamScan(directory, filename):
     """Runs the clamdscan program with specified parameters."""
     result = subprocess.run(
         ["clamdscan", directory], 
@@ -65,7 +67,7 @@ def ClamYaraProcessFile(hash_value):
     comment = ""
 
     # Scan with ClamAV
-    cl_result = ClamScan(SCAN_DIR)
+    cl_result = ClamScan(SCAN_DIR, hash_value)
     cl_version = ClamVersion()
     comment += f"ClamAV: {cl_result} (Version: {cl_version})\n"
     
@@ -73,8 +75,8 @@ def ClamYaraProcessFile(hash_value):
     
     # Add results
     file.add_comment(comment.strip())
-    if (cl_result != 'Error' && cl_result != 'Undetected')
-        ClamYaraAddTag(file, 'clamav', result['result'])
+    if cl_result != 'Error' and cl_result != 'Undetected':
+        ClamYaraAddTag(file, 'clamav', cl_result)
 
 class ClamYaraHookHandler(PluginHookHandler):
     def on_created_file(self, file: File):
