@@ -28,11 +28,18 @@ class ClamYaraHookHandler(PluginHookHandler):
         )
 
         temp_path = None
-
         try:
-            temp_path = create_temp_file(prefix=f"clamyara_{sha256}_")
-
             mwdb_file = mwdb.query_file(sha256)
+
+            if len(mwdb_file.content) > config.MAX_FILE_SIZE:
+                logger.warning(
+                    "Skipping file %s: size %d exceeds limit",
+                    sha256,
+                    len(mwdb_file.content),
+                )
+                return
+
+            temp_path = create_temp_file(prefix=f"clamyara_{sha256}_")
             with open(temp_path, "wb") as f:
                 f.write(mwdb_file.content)
 
