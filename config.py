@@ -1,10 +1,27 @@
 import os
 
+
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
     return value.lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        result = int(value)
+        if result <= 0:
+            raise ValueError("Must be positive")
+        return result
+    except ValueError:
+        raise ValueError(
+            f"Environment variable {name!r} must be a positive integer, got {value!r}"
+        )
+
 
 # MWDB API
 MWDB_API_URL = os.getenv("CLAMYARA_MWDB_API_URL")
@@ -21,6 +38,4 @@ YARA_RULES_PATH = os.getenv(
 )
 
 # Safety
-MAX_FILE_SIZE = int(
-    os.getenv("CLAMYARA_MAX_FILE_SIZE", str(50 * 1024 * 1024)) # 50 MB
-)
+MAX_FILE_SIZE = _env_int("CLAMYARA_MAX_FILE_SIZE", 50 * 1024 * 1024)  # 50 MB

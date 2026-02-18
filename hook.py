@@ -1,4 +1,5 @@
 import logging
+from typing import ClassVar, Optional
 
 from mwdb.core.plugins import PluginHookHandler
 from mwdb.model import File
@@ -12,6 +13,21 @@ logger = logging.getLogger("mwdb.plugin.clamyara")
 
 
 class ClamYaraHookHandler(PluginHookHandler):
+    _mwdb: ClassVar[Optional[MWDB]] = None
+
+    @classmethod
+    def _get_mwdb(cls) -> MWDB:
+        if cls._mwdb is None:
+            if not config.MWDB_API_URL or not config.MWDB_API_KEY:
+                raise RuntimeError(
+                    "CLAMYARA_MWDB_API_URL and CLAMYARA_MWDB_API_KEY must be set"
+                )
+            cls._mwdb = MWDB(
+                api_url=config.MWDB_API_URL,
+                api_key=config.MWDB_API_KEY,
+            )
+        return cls._mwdb
+
     def on_created_file(self, file: File):
         self._process_file(file, "created")
 
@@ -22,26 +38,34 @@ class ClamYaraHookHandler(PluginHookHandler):
         sha256 = file.sha256
         logger.info("Scanning file %s (%s)", sha256, reason)
 
-        mwdb = MWDB(
-            api_url=config.MWDB_API_URL,
-            api_key=config.MWDB_API_KEY,
-        )
+        try:
+            mwdb = self._get_mwdb()
+        except RuntimeError:
+            logger.exception("MWDB client is not configured")
+            return
 
         temp_path = None
         try:
-            mwdb_file = mwdb.query_file(sha256)
+            try:
+                mwdb_file = mwdb.query_file(sha256)
+            except Exception:
+                logger.exception("Failed to query file %s from MWDB API", sha256)
+                return
 
-            if len(mwdb_file.content) > config.MAX_FILE_SIZE:
+            # Проверяем размер через метаданные ДО загрузки содержимого
+            if mwdb_file.file_size > config.MAX_FILE_SIZE:
                 logger.warning(
                     "Skipping file %s: size %d exceeds limit",
                     sha256,
-                    len(mwdb_file.content),
+                    mwdb_file.file_size,
                 )
                 return
 
+            content = mwdb_file.content  # загружаем только после проверки размера
+
             temp_path = create_temp_file(prefix=f"clamyara_{sha256}_")
             with open(temp_path, "wb") as f:
-                f.write(mwdb_file.content)
+                f.write(content)
 
             comment = ""
 
@@ -77,7 +101,8 @@ class ClamYaraHookHandler(PluginHookHandler):
         tag_value = f"{av_name.lower()}:{av_result.lower()}"
 
         for tag in file.tags:
-            if tag.lower() == tag_value:
+            # tag — объект Tag, строка хранится в атрибуте .tag
+            if tag.tag.lower() == tag_value:
                 return
 
         file.add_tag(tag_value)
