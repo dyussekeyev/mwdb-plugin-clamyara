@@ -1,9 +1,13 @@
+import re
 import subprocess
 import logging
 
 from . import config
+from .utils import validate_temp_path
 
 logger = logging.getLogger("mwdb.plugin.clamyara")
+
+_CLAM_FOUND_RE = re.compile(r"^.+:\s+(.+)\s+FOUND$", re.MULTILINE)
 
 
 class ClamYaraScanner:
@@ -29,6 +33,7 @@ class ClamYaraScanner:
             - 'Error'
         """
         try:
+            validate_temp_path(file_path)  # защита от path traversal
             proc = subprocess.run(
                 ["clamscan", "--no-summary", file_path],
                 capture_output=True,
@@ -42,14 +47,20 @@ class ClamYaraScanner:
             if proc.returncode == 1:
                 output = proc.stdout.strip()
                 if "FOUND" in output:
-                    return output.split(":")[-1].replace("FOUND", "").strip()
+                    match = _CLAM_FOUND_RE.search(output)
+                    if match:
+                        return match.group(1).strip()
                 return "Detected"
 
-            logger.error("ClamAV error: %s", proc.stderr.strip())
+            logger.error("ClamAV error (rc=%d): %s", proc.returncode, proc.stderr.strip())
             return "Error"
 
         except subprocess.TimeoutExpired:
             logger.error("ClamAV scan timeout")
+            return "Error"
+
+        except ValueError:
+            logger.error("ClamAV scan rejected: invalid file path %r", file_path)
             return "Error"
 
         except Exception:
@@ -62,6 +73,7 @@ class ClamYaraScanner:
         Returns list of rule names
         """
         try:
+            validate_temp_path(file_path)  # защита от path traversal
             proc = subprocess.run(
                 ["yara", config.YARA_RULES_PATH, file_path],
                 capture_output=True,
@@ -70,16 +82,23 @@ class ClamYaraScanner:
             )
 
             if proc.returncode == 0:
-                return [line.split()[0] for line in proc.stdout.splitlines()]
+                # Пустой вывод = нет совпадений (это нормально)
+                return [
+                    line.split()[0]
+                    for line in proc.stdout.splitlines()
+                    if line.strip()
+                ]
 
-            if proc.returncode == 1:
-                return []
-
-            logger.error("YARA error: %s", proc.stderr.strip())
+            # Любой ненулевой код — ошибка (returncode 1 = ошибка YARA, не "нет совпадений")
+            logger.error("YARA error (rc=%d): %s", proc.returncode, proc.stderr.strip())
             return []
 
         except subprocess.TimeoutExpired:
             logger.error("YARA scan timeout")
+            return []
+
+        except ValueError:
+            logger.error("YARA scan rejected: invalid file path %r", file_path)
             return []
 
         except Exception:
