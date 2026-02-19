@@ -13,14 +13,20 @@ _CLAM_FOUND_RE = re.compile(r"^.+:\s+(.+)\s+FOUND$", re.MULTILINE)
 class ClamYaraScanner:
     @staticmethod
     def clamav_version() -> str:
+        """
+        Best-effort ClamAV version detection using clamdscan only.
+        """
         try:
             proc = subprocess.run(
-                ["clamscan", "--version"],
+                ["clamdscan", "--version"],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
-            return proc.stdout.strip() if proc.returncode == 0 else "Unknown"
+            if proc.returncode == 0:
+                out = (proc.stdout or proc.stderr).strip()
+                return out if out else "Unknown"
+            return "Unknown"
         except Exception:
             return "Unknown"
 
@@ -34,29 +40,49 @@ class ClamYaraScanner:
         """
         try:
             validate_temp_path(file_path)  # защита от path traversal
+
+            # clamdscan return codes:
+            # - 0: no virus found
+            # - 1: virus(es) found
+            # - 2: error
+            cmd = ["clamdscan", "--no-summary", "--fdpass"]
+
+            if config.CLAMD_SOCKET:
+                # On many builds this is supported; if not, clamdscan will error (rc=2).
+                cmd.extend(["--unix-socket", config.CLAMD_SOCKET])
+
+            cmd.append(file_path)
+
             proc = subprocess.run(
-                ["clamscan", "--no-summary", file_path],
+                cmd,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=config.CLAMAV_TIMEOUT,
             )
 
             if proc.returncode == 0:
                 return "Undetected"
 
             if proc.returncode == 1:
-                output = proc.stdout.strip()
+                output = (proc.stdout or "").strip()
                 if "FOUND" in output:
                     match = _CLAM_FOUND_RE.search(output)
                     if match:
                         return match.group(1).strip()
                 return "Detected"
 
-            logger.error("ClamAV error (rc=%d): %s", proc.returncode, proc.stderr.strip())
+            # rc=2 or other -> error
+            stderr = (proc.stderr or "").strip()
+            stdout = (proc.stdout or "").strip()
+            logger.error("clamdscan error (rc=%d): %s %s", proc.returncode, stderr, stdout)
             return "Error"
 
         except subprocess.TimeoutExpired:
             logger.error("ClamAV scan timeout")
+            return "Error"
+
+        except FileNotFoundError:
+            logger.error("clamdscan not found in PATH (ClamAV/clamdscan is required)")
             return "Error"
 
         except ValueError:
