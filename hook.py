@@ -91,7 +91,7 @@ class ClamYaraHookHandler(PluginHookHandler):
                     comment += "YARA: Undetected\n"
 
             if comment:
-                file.add_comment(comment.strip())
+                mwdb_file.add_comment(comment.strip())
 
         finally:
             safe_remove(temp_path)
@@ -106,3 +106,4 @@ class ClamYaraHookHandler(PluginHookHandler):
                 return
 
         file.add_tag(tag_value)
+
