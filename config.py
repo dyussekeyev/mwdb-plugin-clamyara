@@ -37,5 +37,11 @@ YARA_RULES_PATH = os.getenv(
     "/opt/yara/rules.yar",
 )
 
+# Optional: explicit clamd unix socket (depends on distro config, e.g. /run/clamav/clamd.ctl)
+CLAMD_SOCKET = os.getenv("CLAMYARA_CLAMD_SOCKET")
+
+# CLI timeouts
+CLAMAV_TIMEOUT = _env_int("CLAMYARA_CLAMAV_TIMEOUT", 60)
+
 # Safety
 MAX_FILE_SIZE = _env_int("CLAMYARA_MAX_FILE_SIZE", 50 * 1024 * 1024)  # 50 MB
